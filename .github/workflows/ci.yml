@@ -1,0 +1,197 @@
+name: Events Consumer CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  actions: read
+  contents: write
+  packages: write
+  security-events: write
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20.x, 22.x]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linter (if configured)
+        run: npm run lint --if-present
+
+      - name: Run tests (excluding contracts)
+        run: npm run test:ci
+
+      - name: Check for security vulnerabilities
+        run: npm audit --omit=dev --audit-level=moderate
+
+  build:
+    name: Build and Publish Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          echo "BUILD_TIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+          echo "SHORT_SHA=${GITHUB_SHA:0:8}" >> $GITHUB_OUTPUT
+          echo "BRANCH_NAME=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/minimum-linguist/project-aura-events-consumer:${{ github.sha }}
+            ghcr.io/minimum-linguist/project-aura-events-consumer:${{ steps.meta.outputs.SHORT_SHA }}
+            ghcr.io/minimum-linguist/project-aura-events-consumer:${{ steps.meta.outputs.BRANCH_NAME }}
+            ${{ github.ref == 'refs/heads/main' && 'ghcr.io/minimum-linguist/project-aura-events-consumer:latest' || '' }}
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
+            BUILD_TIME=${{ steps.meta.outputs.BUILD_TIME }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan Docker image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/minimum-linguist/project-aura-events-consumer:${{ steps.meta.outputs.SHORT_SHA }}
+          format: 'sarif'
+          output: 'trivy-events-consumer-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        continue-on-error: true
+        with:
+          sarif_file: 'trivy-events-consumer-results.sarif'
+
+      - name: Test Docker image
+        run: |
+          docker pull ghcr.io/minimum-linguist/project-aura-events-consumer:${{ steps.meta.outputs.SHORT_SHA }}
+          docker run -d --name events-consumer-test ghcr.io/minimum-linguist/project-aura-events-consumer:${{ steps.meta.outputs.SHORT_SHA }}
+          sleep 5
+          docker logs events-consumer-test
+          docker stop events-consumer-test
+          docker rm events-consumer-test
+
+      - name: Output image information
+        run: |
+          echo "### Docker Image Published :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`ghcr.io/minimum-linguist/project-aura-events-consumer\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ github.sha }}\` (full SHA)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ steps.meta.outputs.SHORT_SHA }}\` (short SHA)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ steps.meta.outputs.BRANCH_NAME }}\` (branch)" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            echo "- \`latest\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Time:** ${{ steps.meta.outputs.BUILD_TIME }}" >> $GITHUB_STEP_SUMMARY
+
+  release:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write # Allows creating tags, releases, and commits
+      issues: write # Allows commenting on issues
+      pull-requests: write # Allows commenting on PRs
+      packages: write # Allows pulling/pushing Docker images to GHCR
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x' # semantic-release v25 requires Node 22.14+ or 24.10+
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN || 'not-publishing-to-npm' }}
+        run: npx semantic-release
+
+      - name: Extract version from package.json
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag Docker image with semantic version
+        run: |
+          SHORT_SHA=${GITHUB_SHA:0:8}
+          VERSION=${{ steps.version.outputs.VERSION }}
+
+          # Pull the existing image built in the build job
+          docker pull ghcr.io/minimum-linguist/project-aura-events-consumer:$SHORT_SHA
+
+          # Tag with semantic version
+          docker tag ghcr.io/minimum-linguist/project-aura-events-consumer:$SHORT_SHA ghcr.io/minimum-linguist/project-aura-events-consumer:v$VERSION
+
+          # Push the semantic version tag
+          docker push ghcr.io/minimum-linguist/project-aura-events-consumer:v$VERSION
+
+          echo "Tagged and pushed Docker image with version: v$VERSION"
+
+      - name: Output semantic version information
+        run: |
+          echo "### Semantic Release Complete :tada:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**New Version:** \`v${{ steps.version.outputs.VERSION }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Docker Image:** \`ghcr.io/minimum-linguist/project-aura-events-consumer:v${{ steps.version.outputs.VERSION }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View the release at: https://github.com/minimum-linguist/project-aura-events-consumer/releases/tag/v${{ steps.version.outputs.VERSION }}" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: events-consumer-service
+  labels:
+    app: events-consumer
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  selector:
+    app: events-consumer
+  ports:
+  - name: http
+    protocol: TCP
+    port: 3003
+    targetPort: http
+  - name: metrics
+    protocol: TCP
+    port: 9090
+    targetPort: metrics
+  type: ClusterIP  # Internal service only, no external access needed
