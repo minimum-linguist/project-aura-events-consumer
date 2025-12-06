@@ -31,7 +31,9 @@ const config = {
 
   // MongoDB Configuration
   mongodb: {
-    uri: process.env.MONGODB_URI || 'mongodb://admin:password@mongodb-service:27017/projectaura?authSource=admin',
+    uri:
+      process.env.MONGODB_URI ||
+      'mongodb://admin:password@mongodb-service:27017/projectaura?authSource=admin',
     database: process.env.MONGODB_DATABASE || 'projectaura',
     collection: process.env.MONGODB_COLLECTION || 'events',
   },

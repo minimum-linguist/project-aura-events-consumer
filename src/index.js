@@ -74,8 +74,8 @@ app.get('/health', async (req, res) => {
       mongoHealth.status === 'healthy' && consumerHealth.status === 'healthy'
         ? 'healthy'
         : mongoHealth.status === 'unhealthy' || consumerHealth.status === 'unhealthy'
-        ? 'unhealthy'
-        : 'degraded';
+          ? 'unhealthy'
+          : 'degraded';
 
     res.status(overallStatus === 'healthy' ? 200 : 503).json({
       status: overallStatus,
@@ -213,7 +213,6 @@ async function start() {
       console.error('[Service] Unhandled rejection at:', promise, 'reason:', reason);
       shutdown('unhandledRejection');
     });
-
   } catch (error) {
     console.error('[Service] Failed to start service:', error);
     process.exit(1);

@@ -148,7 +148,9 @@ class KafkaEventConsumer {
   async processBatch(batch, resolveOffset, heartbeat, isRunning) {
     const { topic, partition, messages } = batch;
 
-    console.log(`[Kafka Consumer] Processing batch: ${messages.length} messages from ${topic}[${partition}]`);
+    console.log(
+      `[Kafka Consumer] Processing batch: ${messages.length} messages from ${topic}[${partition}]`
+    );
 
     this.metrics.messagesReceived += messages.length;
 
@@ -186,7 +188,6 @@ class KafkaEventConsumer {
 
         // Send heartbeat periodically
         await heartbeat();
-
       } catch (error) {
         this.metrics.messagesFailed++;
         console.error('[Kafka Consumer] Failed to process message:', error);

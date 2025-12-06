@@ -18,9 +18,9 @@ const config = require('../config');
  * Circuit breaker states
  */
 const CircuitState = {
-  CLOSED: 'CLOSED',     // Normal operation
-  OPEN: 'OPEN',         // Failing, reject requests immediately
-  HALF_OPEN: 'HALF_OPEN' // Testing if service recovered
+  CLOSED: 'CLOSED', // Normal operation
+  OPEN: 'OPEN', // Failing, reject requests immediately
+  HALF_OPEN: 'HALF_OPEN', // Testing if service recovered
 };
 
 /**
@@ -61,7 +61,7 @@ class MongoDBWriter {
     if (this.isConnecting) {
       // Wait for existing connection attempt
       while (this.isConnecting) {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
       return;
     }
@@ -96,7 +96,9 @@ class MongoDBWriter {
       this.isConnected = true;
       this.isConnecting = false;
 
-      console.log(`[MongoDB Writer] Successfully connected to ${config.mongodb.database}.${config.mongodb.collection}`);
+      console.log(
+        `[MongoDB Writer] Successfully connected to ${config.mongodb.database}.${config.mongodb.collection}`
+      );
     } catch (error) {
       this.isConnecting = false;
       console.error('[MongoDB Writer] Failed to connect:', error);
@@ -253,7 +255,7 @@ class MongoDBWriter {
       this.metrics.batchWrites++;
 
       // Prepare bulk operations
-      const operations = events.map(event => ({
+      const operations = events.map((event) => ({
         updateOne: {
           filter: { _id: event.id },
           update: { $setOnInsert: { _id: event.id, ...event } },
@@ -272,7 +274,9 @@ class MongoDBWriter {
 
       this.recordSuccess();
 
-      console.log(`[MongoDB Writer] Batch write complete: ${inserted} inserted, ${duplicates} duplicates`);
+      console.log(
+        `[MongoDB Writer] Batch write complete: ${inserted} inserted, ${duplicates} duplicates`
+      );
 
       return {
         success: true,
@@ -309,9 +313,11 @@ class MongoDBWriter {
         config.retry.maxDelay
       );
 
-      console.log(`[MongoDB Writer] Retrying event write (attempt ${attempt + 1}/${config.retry.maxAttempts}) after ${delay}ms`);
+      console.log(
+        `[MongoDB Writer] Retrying event write (attempt ${attempt + 1}/${config.retry.maxAttempts}) after ${delay}ms`
+      );
 
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
       return this.writeEventWithRetry(event, attempt + 1);
     }
   }

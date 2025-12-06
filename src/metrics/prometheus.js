@@ -138,9 +138,9 @@ function updateMetrics() {
 
   // Map circuit state to number
   const circuitStateMap = {
-    'CLOSED': 0,
-    'HALF_OPEN': 1,
-    'OPEN': 2,
+    CLOSED: 0,
+    HALF_OPEN: 1,
+    OPEN: 2,
   };
   metrics.mongoCircuitState.set(circuitStateMap[writerMetrics.circuitState] || 0);
 }

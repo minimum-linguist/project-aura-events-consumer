@@ -5,6 +5,7 @@ A dedicated Kafka consumer microservice that reads events from Kafka topics and 
 ## Overview
 
 This service consumes CloudEvents-formatted messages from Kafka and persists them to MongoDB with:
+
 - **Idempotent writes** - Prevents duplicate events using event ID as MongoDB `_id`
 - **Batch processing** - Optimized throughput with configurable batch sizes
 - **Circuit breaker** - Protects MongoDB from cascading failures
@@ -33,11 +34,13 @@ Backend API → Kafka (events-v1) → Consumer Service → MongoDB (events colle
 ### Local Development
 
 1. **Install dependencies:**
+
    ```bash
    npm install
    ```
 
 2. **Configure environment:**
+
    ```bash
    cp .env.example .env
    # Edit .env with actual Kafka and MongoDB connection details
@@ -51,6 +54,7 @@ Backend API → Kafka (events-v1) → Consumer Service → MongoDB (events colle
 ### Docker
 
 1. **Build image:**
+
    ```bash
    ./scripts/build-image.sh 1.0.0
    ```
@@ -63,12 +67,14 @@ Backend API → Kafka (events-v1) → Consumer Service → MongoDB (events colle
 ### Kubernetes
 
 1. **Build and load image (for kind):**
+
    ```bash
    ./scripts/build-image.sh 1.0.0
    kind load docker-image project-aura-events-consumer:1.0.0 --name project-aura-dev
    ```
 
 2. **Deploy to cluster:**
+
    ```bash
    ./scripts/deploy.sh
    ```
@@ -83,17 +89,17 @@ Backend API → Kafka (events-v1) → Consumer Service → MongoDB (events colle
 
 Environment variables (see `.env.example` for full list):
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `KAFKA_BROKERS` | `kafka-service:9092` | Comma-separated Kafka broker addresses |
-| `KAFKA_GROUP_ID` | `events-mongodb-writer` | Consumer group ID for coordination |
-| `KAFKA_EVENTS_TOPIC` | `events-v1` | Main topic to consume from |
-| `KAFKA_DLQ_TOPIC` | `events-v1-dlq` | Dead-letter queue topic |
-| `MONGODB_URI` | - | MongoDB connection string (with credentials) |
-| `MONGODB_DATABASE` | `projectaura` | Database name |
-| `MONGODB_COLLECTION` | `events` | Collection name for events |
-| `BATCH_SIZE` | `100` | Max events per batch write |
-| `CIRCUIT_FAILURE_THRESHOLD` | `5` | Circuit breaker failure threshold |
+| Variable                    | Default                 | Description                                  |
+| --------------------------- | ----------------------- | -------------------------------------------- |
+| `KAFKA_BROKERS`             | `kafka-service:9092`    | Comma-separated Kafka broker addresses       |
+| `KAFKA_GROUP_ID`            | `events-mongodb-writer` | Consumer group ID for coordination           |
+| `KAFKA_EVENTS_TOPIC`        | `events-v1`             | Main topic to consume from                   |
+| `KAFKA_DLQ_TOPIC`           | `events-v1-dlq`         | Dead-letter queue topic                      |
+| `MONGODB_URI`               | -                       | MongoDB connection string (with credentials) |
+| `MONGODB_DATABASE`          | `projectaura`           | Database name                                |
+| `MONGODB_COLLECTION`        | `events`                | Collection name for events                   |
+| `BATCH_SIZE`                | `100`                   | Max events per batch write                   |
+| `CIRCUIT_FAILURE_THRESHOLD` | `5`                     | Circuit breaker failure threshold            |
 
 ## Health Checks
 
@@ -118,6 +124,7 @@ curl http://localhost:9090/metrics
 ```
 
 **Key Metrics:**
+
 - `kafka_messages_received_total` - Total messages received from Kafka
 - `kafka_messages_processed_total` - Total messages successfully processed
 - `kafka_messages_failed_total` - Total message processing failures
@@ -183,11 +190,13 @@ kubectl get pods -l app=events-consumer -o wide
 **Symptom:** Pods continually restart
 
 **Common Causes:**
+
 1. **MongoDB authentication failure** - Check `events-consumer-secrets` has correct `MONGODB_URI`
 2. **Kafka connection failure** - Verify Kafka is running and accessible
 3. **Missing secret** - Ensure `events-consumer-secrets` exists
 
 **Fix:**
+
 ```bash
 # Check logs for error
 kubectl logs events-consumer-<pod-id>
@@ -206,6 +215,7 @@ kubectl delete pods -l app=events-consumer
 **Symptom:** `kafka_messages_received_total` metric stays at 0
 
 **Checks:**
+
 1. **Kafka topic exists** - Verify `events-v1` topic created
 2. **Backend publishing** - Check backend is sending events to Kafka
 3. **Consumer group** - Verify consumer group is subscribed
@@ -225,6 +235,7 @@ kubectl exec kafka-0 -- kafka-consumer-groups --bootstrap-server localhost:9092 
 **Cause:** MongoDB is unhealthy or connection is failing
 
 **Fix:**
+
 1. Check MongoDB health: `kubectl get pods | grep mongodb`
 2. Test MongoDB connection from consumer pod
 3. Circuit breaker will automatically retry after timeout (30s by default)
@@ -270,6 +281,7 @@ npm run format
 ## Support
 
 For issues or questions:
+
 - Check logs: `kubectl logs deployment/events-consumer`
 - Review metrics: `http://localhost:9090/metrics`
 - View health status: `http://localhost:3003/health`
